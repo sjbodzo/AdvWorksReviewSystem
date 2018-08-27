@@ -29,7 +29,7 @@ build-app:
 
 run-app: build-app
 	@echo "Running app..."
-	docker-compose up
+	docker-compose up --force-recreate
 
 docker-build-rcv:
 	@echo "Building receiver version: $(RCV_APP_VERSION), api version: $(RCV_API_VERSION)"

@@ -28,8 +28,8 @@ checks=0
 while [ "$checks" -lt "$MAX_ATTEMPTS" ]; do
     schemaCount=`echo "SELECT COUNT(*) from information_schema.tables" | psql -qtAX "dbname=AdventureWorks host=$db user=postgres password=postgres"`
     if [ "$schemaCount" == "343" ]; then
-        reviewCount=`echo "SET search_path=production; SELECT COUNT(*) FROM Production.ProductReview" | psql -qtAX "dbname=AdventureWorks host=$db user=postgres password=postgres"`
-        if [ "$reviewCount" == "5" ]; then
+        reviewCount=`echo "SET search_path=production; SELECT COUNT(*) FROM Production.ProductReview;" | psql -qtAX "dbname=AdventureWorks host=$db user=postgres password=postgres"`
+        if [ $reviewCount -gt 4 ]; then
             >&2 echo "DB ready"
             break
         else
