@@ -1,0 +1,34 @@
+version: '2'
+services:
+  queue:
+    image: "redis"
+    ports:
+      - '6379:6379'
+  db:
+    build: 
+      context: ./db/setup
+      dockerfile: Dockerfile
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - '5432:5432'
+  rcv:
+    build: 
+      context: .
+      dockerfile: Dockerfile-rcv
+    depends_on:
+      - "db"
+      - "queue"
+    command: ["./db-wait.sh", "db", "./main", "-apiPort=8081", "-dbEndpoint=db", "-dbPort=5432", 
+              "-dbUser=postgres", "-database=AdventureWorks", "-apiVersion=v1", 
+              "-redisEndpoint=queue", "-redisPort=6379", "-dbPw=postgres"]
+    ports:
+      - '8081:8081'
+  approve:
+    build: 
+      context: . 
+      dockerfile: Dockerfile-approve
+    depends_on:
+      - "queue"
+    command: ["./redis-wait.sh", "queue", "./main", "-redisProcQueueName=proc_queue", "-redisEndpoint=queue", "-redisPort=6379"]

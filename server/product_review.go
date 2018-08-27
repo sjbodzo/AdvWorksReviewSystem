@@ -6,9 +6,10 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"review_system/db"
-	"review_system/queue"
-	"review_system/review"
+
+	"github.com/sjbodzo/review_system/db"
+	"github.com/sjbodzo/review_system/queue"
+	"github.com/sjbodzo/review_system/review"
 )
 
 // AddReviewResponse stores the response to the request
@@ -68,6 +69,9 @@ func ProductReview(db *db.Wrapper, pool *queue.WorkerPool) http.HandlerFunc {
 				return
 			}
 
+			// Sanitize the input to avoid XSS attacks
+			req.Sanitize()
+
 			// request is valid, write it to the db & queue up for processing
 			id, err := db.UpsertReview(req.ProductID, req.ReviewerName, req.EmailAddress, req.Rating, req.Review)
 			if err != nil {
@@ -75,7 +79,7 @@ func ProductReview(db *db.Wrapper, pool *queue.WorkerPool) http.HandlerFunc {
 				http.Error(w, fmtResponse(nil, []error{fmt.Errorf("Server error")}), http.StatusBadRequest)
 				return
 			}
-			go pool.PushReview(req, "req_queue", "PENDING", 0)
+			go pool.PushReview(req, "req_queue", 0)
 
 			m, _ := json.Marshal(&AddReviewResponse{
 				ReviewID: id,

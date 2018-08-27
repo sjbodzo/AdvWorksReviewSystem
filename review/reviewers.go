@@ -5,6 +5,9 @@ import (
 	"regexp"
 )
 
+// Singleton to hold default language reviewer
+var defaultLangReviewerSingleton *LanguageReviewer
+
 // Reviewer reviews the given ProductReview based on some criteria
 type Reviewer interface {
 	Review(pr *ProductReview) (approval bool)
@@ -18,6 +21,10 @@ type LanguageReviewer struct {
 
 // NewLanguageReviewer returns a LanguageReviewer for use
 func NewLanguageReviewer(blacklist []string, r *regexp.Regexp) *LanguageReviewer {
+	// avoid costly regex compilation at scale by package-local singleton
+	if defaultLangReviewerSingleton != nil {
+		return defaultLangReviewerSingleton
+	}
 	return &LanguageReviewer{
 		Blacklist:  blacklist,
 		SplitRegex: r,

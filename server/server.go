@@ -3,9 +3,10 @@ package server
 import (
 	"fmt"
 	"net/http"
-	"review_system/db"
-	"review_system/queue"
 	"time"
+
+	"github.com/sjbodzo/review_system/db"
+	"github.com/sjbodzo/review_system/queue"
 )
 
 // New returns a new Server instance that can respond to requests to store reviews

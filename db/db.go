@@ -134,8 +134,8 @@ func (w *Wrapper) closeStatements() (err error) {
 
 // New returns a new connected db using provided parameters
 func New(host string, port int, user string, password string, database string) (*Wrapper, error) {
-	c := fmt.Sprintf("user=%s dbname=%s host=%s port=%d sslmode=disable ",
-		user, database, host, port)
+	c := fmt.Sprintf("user=%s dbname=%s password=%s host=%s port=%d sslmode=disable ",
+		user, database, password, host, port)
 	db, err := sql.Open("postgres", c)
 	if err != nil {
 		return nil, err

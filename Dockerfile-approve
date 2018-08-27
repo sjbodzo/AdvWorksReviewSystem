@@ -1,0 +1,31 @@
+FROM golang:1.10.3 as builder
+LABEL       maintainer="jess@sjbodzo.com"
+WORKDIR     /go/src/github.com/sjbodzo/review_system
+ENV         GOPATH /go
+ENV         GOOS linux
+ENV         GOARCH amd64
+ENV         CGO_ENABLED 0
+COPY        . ./
+
+# Dependencies are managed using dep for now
+ADD         vendor /go/src/
+CMD         cd /go/src/ && go install -v ./...
+
+# Now build it
+RUN         cd /go/src/github.com/sjbodzo/review_system/cmd/approverd && \
+            go build -o main -a
+
+
+FROM alpine:latest 
+LABEL       maintainer="jess@sjbodzo.com"
+WORKDIR     /root/
+
+# Copy over build artifact from builder
+COPY        --from=builder /go/src/github.com/sjbodzo/review_system/cmd/approverd .
+
+
+# Copy wrapper script to wait on redis
+COPY        redis-wait.sh .
+
+# Ensure postgres client is available to our script
+RUN         apk update && apk add redis

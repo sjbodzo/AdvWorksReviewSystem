@@ -3,9 +3,11 @@ package main
 import (
 	"flag"
 	"log"
-	"review_system/db"
-	"review_system/queue"
-	"review_system/server"
+	"os"
+
+	"github.com/sjbodzo/review_system/db"
+	"github.com/sjbodzo/review_system/queue"
+	"github.com/sjbodzo/review_system/server"
 )
 
 var dbflags struct {
@@ -38,6 +40,13 @@ func init() {
 }
 
 func main() {
+	f, err := os.OpenFile("/tmp/receiverd-logs", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatal("Unable to open log file for writing")
+	}
+	defer f.Close()
+	log.SetOutput(f)
+
 	if err := run(); err != nil {
 		log.Fatalln(err)
 	}

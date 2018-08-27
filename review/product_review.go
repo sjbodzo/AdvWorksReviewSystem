@@ -2,6 +2,8 @@ package review
 
 import (
 	"fmt"
+	"html"
+	"html/template"
 	"regexp"
 	"strings"
 )
@@ -13,6 +15,23 @@ type ProductReview struct {
 	ReviewerName string `json:"name"`
 	EmailAddress string `json:"email"`
 	Rating       int    `json:"rating"`
+}
+
+// Sanitize escapes html and javascript in the review, to help prevent XSS attacks
+func (r *ProductReview) Sanitize() {
+	r.Review = html.EscapeString(r.Review)
+	r.Review = template.JSEscapeString(r.Review)
+}
+
+// NotifyClient notifies a client about their review with the given msg and notifiers
+func (r *ProductReview) NotifyClient(msg string, approved bool, notifiers ...ClientNotifier) (errors []error) {
+	for _, notifier := range notifiers {
+		err := notifier.Notify(r, approved, msg)
+		if err != nil {
+			errors = append(errors, err)
+		}
+	}
+	return errors
 }
 
 // ApproveReview vets the product review for approval using the passed in Reviewers
@@ -47,6 +66,14 @@ func (r *ProductReview) Validate() (errors []error) {
 	if params != nil {
 		err := fmt.Errorf("Missing param(s): %s", strings.Join(params, ", "))
 		errors = append(errors, err)
+	}
+
+	// validate reviewer name
+	if r.ReviewerName != "" {
+		if ok, _ := regexp.MatchString(`^[a-zA-Z0-9].$`, r.ReviewerName); ok {
+			err := fmt.Errorf("Invalid reviewer name format: please use only characters and digits")
+			errors = append(errors, err)
+		}
 	}
 
 	// validate email address format

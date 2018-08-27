@@ -3,15 +3,18 @@ package queue
 import (
 	"encoding/json"
 	"fmt"
-	"review_system/review"
 
 	"github.com/gomodule/redigo/redis"
+	"github.com/sjbodzo/review_system/review"
 )
+
+// maxAttempts is the max number of times to try processing a product review job
+// before discarding it and denying the client approval
+var maxAttempts = 1
 
 // ProductReviewJob represents a product review that needs processing
 type ProductReviewJob struct {
 	Review   review.ProductReview `json:"review"`
-	Status   string               `json:"status"`
 	Attempts int                  `json:"attempts"`
 }
 
@@ -44,11 +47,9 @@ func newRedisPool(endpoint string, port int) *redis.Pool {
 }
 
 // PushReview pushes the given product review to the given list
-func (w *WorkerPool) PushReview(r review.ProductReview, listName string, status string,
-	attempts int) (queueLength int64, err error) {
+func (w *WorkerPool) PushReview(r review.ProductReview, listName string, attempts int) (queueLength int64, err error) {
 	job := ProductReviewJob{
 		Review:   r,
-		Status:   status,
 		Attempts: attempts,
 	}
 	msg, err := json.Marshal(&job)
@@ -64,28 +65,70 @@ func (w *WorkerPool) PushReview(r review.ProductReview, listName string, status 
 
 // ProcessNextReview attempts to process the next product review in the queue,
 // incrementing the attempts counter on the job in the process. While the
-// job is being processed, it sits in the processing queue.
+// job is being processed, it sits in the toQueue (processing) queue.
 //
 // If the job fails and the attempts counter is below the threshold,
-// the job is committed back to the request queue.
+// the job is committed back to the fromQueue (request) queue.
 //
 // If the job fails and the attempts counter exceeds the threshold,
 // the job is discarded.
-func (w *WorkerPool) ProcessNextReview(reqQName string, procQName string) (err error) {
+func (w *WorkerPool) ProcessNextReview(fromQueue string, toQueue string) (err error) {
 	c := w.pool.Get()
 	defer c.Close()
-	msg, err := c.Do("RPOPLPUSH", reqQName, procQName)
+	msg, err := c.Do("RPOPLPUSH", fromQueue, toQueue)
+	if err != nil {
+		return err
+	} else if msg == nil {
+		return
+	}
+
+	var job ProductReviewJob
+	err = json.Unmarshal(msg.([]byte), &job)
 	if err != nil {
 		return err
 	}
 
-	// TODO: check for nil return in value?
-	fmt.Println(msg)
+	fmt.Println("job popped:", job)
+	reviewer := review.DefaultLanguageReviewer()
+	approved := job.Review.ApproveReview(reviewer)
+	notifier := review.DefaultApprovalStatusNotifier()
+	if approved {
+		job.Review.NotifyClient("We hope to see you again soon!", true, notifier)
+		err = w.RemoveReview(&job, toQueue)
+		if err != nil {
+			return err
+		}
+	} else if job.Attempts+1 >= maxAttempts {
+		job.Review.NotifyClient("Please revise and resubmit your review!", true, notifier)
+		err = w.RemoveReview(&job, toQueue)
+		if err != nil {
+			return err
+		}
+	} else {
+		job.Attempts++
+		_, err := c.Do("RPOPLPUSH", toQueue, fromQueue)
+		if err != nil {
+			return fmt.Errorf("Unable to re-queue job for review\nError: %v", err)
+		}
+	}
 
-	job := &ProductReviewJob{}
-	err = json.Unmarshal([]byte(msg.(string)), job)
+	return
+}
+
+// RemoveReview attempts to remove a review job, without queueing it anywhere else
+func (w *WorkerPool) RemoveReview(job *ProductReviewJob, fromQueue string) (err error) {
+	b, err := json.Marshal(job)
 	if err != nil {
-		return err
+		return fmt.Errorf("Unable to marshal review job\nError: %v", err)
+	}
+
+	c := w.pool.Get()
+	defer c.Close()
+	n, err := c.Do("LREM", fromQueue, 1, string(b))
+	if err != nil {
+		return fmt.Errorf("Unable to remove job from queue\nError: %v", err)
+	} else if n.(int64) != 1 {
+		return fmt.Errorf("Expected to remove %d jobs from queue, but removed %d instead", 1, n)
 	}
 
 	return nil

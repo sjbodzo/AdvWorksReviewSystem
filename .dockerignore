@@ -1,0 +1,9 @@
+db/setup
+!cmd/approverd/main.go
+!cmd/receiverd/main.go
+Makefile
+README.md
+.git
+.gitignore
+*.png
+*.tar
